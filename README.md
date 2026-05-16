@@ -33,6 +33,7 @@ Timer commands:
   reset                          Stop the timer and reset it to zero
 
 Settings commands:
+  settings                       Display current scale settings
   beep <0-5>                     Set speaker volume (0=silent, 5=loudest)
   auto-off <5-30>                Set inactivity auto-off timeout in minutes
   smoothing on|off               Enable or disable flow rate smoothing
@@ -55,6 +56,9 @@ bookoo monitor
 
 # Reset the timer between shots (stops it first if still running)
 bookoo reset
+
+# Read current settings
+bookoo settings
 
 # Adjust settings
 bookoo beep 3            # set volume to mid-level
@@ -106,11 +110,18 @@ Each `Measurement` contains:
 
 ```go
 type Measurement struct {
+    // Live readings
     Weight    float64       // grams (negative if below tare)
     FlowRate  float64       // grams/second
     Battery   int           // 0–100
     Timestamp time.Duration // scale's internal elapsed time
     Unit      WeightUnit    // gram or ounce
+
+    // Current settings (reported by the scale in every packet)
+    AutoOff       int           // inactivity auto-off timeout in minutes
+    BeepLevel     int           // speaker volume, 0 (silent) to 5 (loudest)
+    FlowSmoothing bool          // whether flow rate smoothing is enabled
+    StopCondition StopCondition // auto-stop trigger mode (Themis Ultra)
 }
 ```
 

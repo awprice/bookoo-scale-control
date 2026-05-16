@@ -49,6 +49,7 @@ const (
 )
 
 // Measurement is a single reading received from the scale via BLE notification.
+// In addition to live weight data, each packet carries the scale's current settings.
 type Measurement struct {
 	// Weight in grams. Negative values indicate a reading below the tare point.
 	Weight float64
@@ -60,6 +61,12 @@ type Measurement struct {
 	Timestamp time.Duration
 	// Unit is the weight unit currently configured on the scale.
 	Unit WeightUnit
+
+	// Current settings reported by the scale in every packet.
+	AutoOff       int          // inactivity auto-off timeout in minutes
+	BeepLevel     int          // speaker volume, 0 (silent) to 5 (loudest)
+	FlowSmoothing bool         // whether flow rate smoothing is enabled
+	StopCondition StopCondition // auto-stop trigger mode (Themis Ultra)
 }
 
 // parsePacket decodes a 20-byte BLE notification into a Measurement.
@@ -83,11 +90,18 @@ func parsePacket(pkt []byte) (Measurement, bool) {
 		flow = -flow
 	}
 
+	// Standby time is reported in 6-second (0.1-minute) increments; divide by 10 for minutes.
+	autoOff := int(uint16(pkt[14])<<8|uint16(pkt[15])) / 10
+
 	return Measurement{
-		Weight:    weight,
-		FlowRate:  flow,
-		Battery:   int(pkt[13]),
-		Timestamp: time.Duration(tsMs) * time.Millisecond,
-		Unit:      WeightUnit(pkt[5]),
+		Weight:        weight,
+		FlowRate:      flow,
+		Battery:       int(pkt[13]),
+		Timestamp:     time.Duration(tsMs) * time.Millisecond,
+		Unit:          WeightUnit(pkt[5]),
+		AutoOff:       autoOff,
+		BeepLevel:     int(pkt[16]),
+		FlowSmoothing: pkt[17] != 0,
+		StopCondition: StopCondition(pkt[18]),
 	}, true
 }

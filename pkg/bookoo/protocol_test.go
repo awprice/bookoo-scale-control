@@ -25,6 +25,21 @@ func buildPacket(tsMs uint32, unit WeightUnit, wSign byte, weightRaw uint32, fSi
 	return pkt
 }
 
+// buildPacketWithSettings constructs a 20-byte packet that also encodes current scale settings.
+// autoOffMinutes is the human-readable minutes value; it is encoded on the wire as minutes×10.
+func buildPacketWithSettings(autoOffMinutes uint16, beepLevel uint8, smoothing bool, stopCond StopCondition) []byte {
+	pkt := buildPacket(0, WeightUnitGram, 0x00, 0, 0x00, 0, 100)
+	wire := autoOffMinutes * 10
+	pkt[14] = byte(wire >> 8)
+	pkt[15] = byte(wire)
+	pkt[16] = beepLevel
+	if smoothing {
+		pkt[17] = 0x01
+	}
+	pkt[18] = byte(stopCond)
+	return pkt
+}
+
 func TestParsePacket_positiveWeight(t *testing.T) {
 	// 250.00 g, 2.50 g/s, 72% battery, 30s elapsed
 	pkt := buildPacket(30_000, WeightUnitGram, 0x00, 25_000, 0x00, 250, 72)
@@ -119,6 +134,47 @@ func TestParsePacket_wrongType(t *testing.T) {
 	_, ok := parsePacket(pkt)
 	if ok {
 		t.Error("expected ok=false for wrong type byte")
+	}
+}
+
+func TestParsePacket_settings(t *testing.T) {
+	pkt := buildPacketWithSettings(15, 3, true, StopConditionContainerRemoved)
+	m, ok := parsePacket(pkt)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if m.AutoOff != 15 {
+		t.Errorf("AutoOff: got %v, want 15", m.AutoOff)
+	}
+	if m.BeepLevel != 3 {
+		t.Errorf("BeepLevel: got %v, want 3", m.BeepLevel)
+	}
+	if !m.FlowSmoothing {
+		t.Errorf("FlowSmoothing: got false, want true")
+	}
+	if m.StopCondition != StopConditionContainerRemoved {
+		t.Errorf("StopCondition: got %v, want StopConditionContainerRemoved", m.StopCondition)
+	}
+}
+
+func TestParsePacket_settingsDefaults(t *testing.T) {
+	// Packet with all settings bytes zero.
+	pkt := buildPacket(0, WeightUnitGram, 0x00, 0, 0x00, 0, 100)
+	m, ok := parsePacket(pkt)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if m.AutoOff != 0 {
+		t.Errorf("AutoOff: got %v, want 0", m.AutoOff)
+	}
+	if m.BeepLevel != 0 {
+		t.Errorf("BeepLevel: got %v, want 0", m.BeepLevel)
+	}
+	if m.FlowSmoothing {
+		t.Errorf("FlowSmoothing: got true, want false")
+	}
+	if m.StopCondition != StopConditionFlowStops {
+		t.Errorf("StopCondition: got %v, want StopConditionFlowStops", m.StopCondition)
 	}
 }
 

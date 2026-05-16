@@ -25,6 +25,7 @@ Timer commands:
   reset                          Stop the timer and reset it to zero
 
 Settings commands:
+  settings                       Display current scale settings
   beep <0-5>                     Set speaker volume (0=silent, 5=loudest)
   auto-off <5-30>                Set inactivity auto-off timeout in minutes
   smoothing on|off               Enable or disable flow rate smoothing
@@ -88,6 +89,8 @@ func (a *App) Run(ctx context.Context, args []string) error {
 	defer cancel()
 
 	switch cmd {
+	case "settings":
+		return a.settings(scanCtx)
 	case "monitor":
 		return a.monitor(ctx, scanCtx)
 	case "tare":
@@ -150,6 +153,34 @@ func (a *App) Run(ctx context.Context, args []string) error {
 		fmt.Fprintf(os.Stderr, "unknown command: %q\n\n%s", cmd, usage)
 		return fmt.Errorf("unknown command: %q", cmd)
 	}
+}
+
+func (a *App) settings(scanCtx context.Context) error {
+	scale, err := a.connect(scanCtx)
+	if err != nil {
+		return err
+	}
+	defer scale.Close()
+
+	var m bookoo.Measurement
+	select {
+	case m, _ = <-scale.Measurements():
+	case <-time.After(2 * time.Second):
+		return fmt.Errorf("timed out waiting for settings")
+	}
+
+	smoothing := map[bool]string{true: "on", false: "off"}[m.FlowSmoothing]
+	stopCond := map[bookoo.StopCondition]string{
+		bookoo.StopConditionFlowStops:        "flow stops",
+		bookoo.StopConditionContainerRemoved: "container removed",
+	}[m.StopCondition]
+
+	fmt.Printf("Current settings:\n")
+	fmt.Printf("  Beep level:     %d\n", m.BeepLevel)
+	fmt.Printf("  Auto-off:       %d min\n", m.AutoOff)
+	fmt.Printf("  Flow smoothing: %s\n", smoothing)
+	fmt.Printf("  Stop condition: %s\n", stopCond)
+	return nil
 }
 
 func (a *App) monitor(ctx, scanCtx context.Context) error {

@@ -226,6 +226,31 @@ func TestShot_doesNotStopTimerOnScaleDisconnect(t *testing.T) {
 	assertNotCalled(t, mock.called(), "StopTimer")
 }
 
+func TestSettings(t *testing.T) {
+	mock := newMockScale()
+	mock.measurements <- bookoo.Measurement{
+		BeepLevel:     3,
+		AutoOff:       15,
+		FlowSmoothing: true,
+		StopCondition: bookoo.StopConditionContainerRemoved,
+	}
+
+	if err := newTestApp(mock).Run(context.Background(), []string{"settings"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertCalled(t, mock.called(), "Close")
+}
+
+func TestSettings_disconnectBeforeMeasurement(t *testing.T) {
+	mock := newMockScale()
+	mock.disconnect()
+
+	// closed channel returns immediately; settings should still return without error
+	if err := newTestApp(mock).Run(context.Background(), []string{"settings"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestMonitor_exitsOnScaleDisconnect(t *testing.T) {
 	mock := newMockScale()
 	mock.disconnect()
