@@ -12,3 +12,9 @@ go.work.sum
 .vscode/
 *.swp
 *.swo
+
+# Claude Code
+memory/
+
+# Go vendor directory
+vendor/

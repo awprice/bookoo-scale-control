@@ -17,7 +17,7 @@ const usage = `Usage: bookoo <command> [flags]
 Shot commands:
   monitor                        Stream live weight measurements until Ctrl+C
   tare                           Tare the scale (zero the weight)
-  shot                           Tare, start the timer, and stream live measurements until Ctrl+C
+  shot                           Tare, start the timer, and display real-time charts until Ctrl+C
 
 Timer commands:
   start                          Start the built-in timer
@@ -34,6 +34,9 @@ Settings commands:
 
 Flags:
   -timeout duration   How long to scan before giving up (default 30s)
+
+Other:
+  demo                           Simulate a shot with fake data (no scale required)
 `
 
 // Scale is the interface used by commands. It is satisfied by *bookoo.Scale.
@@ -89,6 +92,8 @@ func (a *App) Run(ctx context.Context, args []string) error {
 	defer cancel()
 
 	switch cmd {
+	case "demo":
+		return a.demo(ctx)
 	case "settings":
 		return a.settings(scanCtx)
 	case "monitor":
@@ -206,10 +211,57 @@ func (a *App) shot(ctx, scanCtx context.Context) error {
 		return fmt.Errorf("shot: %w", err)
 	}
 
-	return stream(ctx, scale, "Shot started. Press Ctrl+C to stop.", func() {
+	if isTerminal() {
+		return runShotTUI(ctx, scale)
+	}
+	return runShotStream(ctx, scale)
+}
+
+// runShotStream is the non-interactive fallback used when stdout is not a TTY.
+func runShotStream(ctx context.Context, scale Scale) error {
+	fmt.Println("Shot started. Press Ctrl+C to stop.")
+	fmt.Println()
+
+	var measurements []bookoo.Measurement
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for m := range scale.Measurements() {
+			measurements = append(measurements, m)
+			fmt.Printf("\rWeight: %7.2f g  Flow: %+6.2f g/s  Battery: %3d%%  Time: %s    ",
+				m.Weight, m.FlowRate, m.Battery, formatDuration(m.Timestamp))
+		}
+		fmt.Println()
+	}()
+
+	select {
+	case <-ctx.Done():
 		fmt.Println("\nStopping timer...")
 		scale.StopTimer()
-	})
+		scale.Close()
+	case <-done:
+		fmt.Println("Scale disconnected.")
+	}
+
+	<-done
+	printShotGraph(os.Stdout, measurements)
+	return nil
+}
+
+func (a *App) demo(ctx context.Context) error {
+	fmt.Println("Scanning for Bookoo scale...")
+	select {
+	case <-time.After(1500 * time.Millisecond):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	fmt.Println("Connected to Bookoo Themis Ultra.")
+
+	scale := newDemoScale()
+	if err := scale.TareAndStart(); err != nil {
+		return err
+	}
+	return runShotTUI(ctx, scale)
 }
 
 // command connects, runs fn, waits for one measurement to confirm the write

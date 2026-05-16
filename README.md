@@ -2,6 +2,8 @@
 
 A Go library and CLI for interacting with [Bookoo](https://bookoocoffee.com) espresso scales over Bluetooth Low Energy.
 
+![Demo](docs/demo.gif)
+
 ## Supported Scales
 
 | Scale | Status |
@@ -25,7 +27,7 @@ bookoo <command> [flags]
 Shot commands:
   monitor                        Stream live weight measurements until Ctrl+C
   tare                           Tare the scale (zero the weight)
-  shot                           Tare, start the timer, and stream live measurements until Ctrl+C
+  shot                           Tare, start the timer, and display real-time charts until Ctrl+C
 
 Timer commands:
   start                          Start the built-in timer
@@ -42,13 +44,16 @@ Settings commands:
 
 Flags:
   -timeout duration   How long to scan before giving up (default 30s)
+
+Other:
+  demo                           Simulate a shot with fake data (no scale required)
 ```
 
 ### Examples
 
 ```sh
-# Pull a shot: tares, starts the timer, and streams live measurements.
-# Ctrl+C stops the timer on the scale and disconnects.
+# Pull a shot: tares, starts the timer, and shows real-time weight and flow rate charts.
+# Ctrl+C stops the timer and leaves the final chart on screen as a shot summary.
 bookoo shot
 
 # Watch live measurements without touching the timer
@@ -61,10 +66,13 @@ bookoo reset
 bookoo settings
 
 # Adjust settings
-bookoo beep 3            # set volume to mid-level
-bookoo auto-off 10       # power off after 10 minutes idle
-bookoo smoothing on      # enable flow rate smoothing
+bookoo beep 3               # set volume to mid-level
+bookoo auto-off 10          # power off after 10 minutes idle
+bookoo smoothing on         # enable flow rate smoothing
 bookoo stop-condition flow  # stop timer when flow drops to zero (Ultra only)
+
+# Try the CLI without a scale
+bookoo demo
 ```
 
 ## Library
@@ -130,6 +138,7 @@ type Measurement struct {
 - macOS with Bluetooth LE
 - Go 1.21+
 - Xcode Command Line Tools (CGo required by the BLE library)
+- A 256-colour terminal for the shot graph (most modern terminals qualify)
 
 ## Protocol Sources
 
