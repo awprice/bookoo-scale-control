@@ -1,0 +1,14 @@
+# compiled binaries
+/bookoo
+*.exe
+*.test
+
+# go workspace
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
