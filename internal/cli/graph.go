@@ -32,6 +32,29 @@ func printShotGraph(w io.Writer, measurements []bookoo.Measurement) {
 	fmt.Fprint(w, renderShotGraph(measurements))
 }
 
+// smoothFlowRates returns a centred moving-average of flow rates over a
+// ±3 sample window (~600 ms at 10 Hz), smoothing noise without shifting peaks.
+func smoothFlowRates(measurements []bookoo.Measurement) []float64 {
+	const half = 3
+	n := len(measurements)
+	out := make([]float64, n)
+	for i := range measurements {
+		lo, hi := i-half, i+half
+		if lo < 0 {
+			lo = 0
+		}
+		if hi >= n {
+			hi = n - 1
+		}
+		sum := 0.0
+		for j := lo; j <= hi; j++ {
+			sum += measurements[j].FlowRate
+		}
+		out[i] = sum / float64(hi-lo+1)
+	}
+	return out
+}
+
 // renderShotGraph returns the shot summary as a string.
 func renderShotGraph(measurements []bookoo.Measurement) string {
 	if len(measurements) < 2 {
@@ -50,17 +73,28 @@ func renderShotGraph(measurements []bookoo.Measurement) string {
 		maxT = 1
 	}
 
+	smoothedFlow := smoothFlowRates(measurements)
+	for i, v := range smoothedFlow {
+		if v > -0.075 && v < 0.075 {
+			smoothedFlow[i] = 0
+		}
+	}
+
 	maxWeight := 1.0
 	minFlow, maxFlow := 0.0, 0.0
-	for _, m := range measurements {
-		if m.Weight > maxWeight {
-			maxWeight = m.Weight
+	for i, m := range measurements {
+		w := m.Weight
+		if w < 0 {
+			w = 0
 		}
-		if m.FlowRate < minFlow {
-			minFlow = m.FlowRate
+		if w > maxWeight {
+			maxWeight = w
 		}
-		if m.FlowRate > maxFlow {
-			maxFlow = m.FlowRate
+		if smoothedFlow[i] < minFlow {
+			minFlow = smoothedFlow[i]
+		}
+		if smoothedFlow[i] > maxFlow {
+			maxFlow = smoothedFlow[i]
 		}
 	}
 	if minFlow == maxFlow {
@@ -73,10 +107,16 @@ func renderShotGraph(measurements []bookoo.Measurement) string {
 		linechart.WithStyles(graphAxisStyle, graphLabelStyle, weightLineStyle),
 	)
 	wc.DrawXYAxisAndLabel()
+	clampWeight := func(w float64) float64 {
+		if w < 0 {
+			return 0
+		}
+		return w
+	}
 	for i := 1; i < len(measurements); i++ {
 		wc.DrawBrailleLineWithStyle(
-			canvas.Float64Point{X: getX(i - 1), Y: measurements[i-1].Weight},
-			canvas.Float64Point{X: getX(i), Y: measurements[i].Weight},
+			canvas.Float64Point{X: getX(i - 1), Y: clampWeight(measurements[i-1].Weight)},
+			canvas.Float64Point{X: getX(i), Y: clampWeight(measurements[i].Weight)},
 			weightLineStyle,
 		)
 	}
@@ -89,8 +129,8 @@ func renderShotGraph(measurements []bookoo.Measurement) string {
 	fc.DrawXYAxisAndLabel()
 	for i := 1; i < len(measurements); i++ {
 		fc.DrawBrailleLineWithStyle(
-			canvas.Float64Point{X: getX(i - 1), Y: measurements[i-1].FlowRate},
-			canvas.Float64Point{X: getX(i), Y: measurements[i].FlowRate},
+			canvas.Float64Point{X: getX(i - 1), Y: smoothedFlow[i-1]},
+			canvas.Float64Point{X: getX(i), Y: smoothedFlow[i]},
 			flowLineStyle,
 		)
 	}

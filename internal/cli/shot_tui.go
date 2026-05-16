@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/awprice/bookoo-scale-control/pkg/bookoo"
 	tea "github.com/charmbracelet/bubbletea"
@@ -21,6 +22,7 @@ type shotModel struct {
 	ctx          context.Context
 	scale        Scale
 	measurements []bookoo.Measurement
+	started      bool
 }
 
 func (m shotModel) Init() tea.Cmd {
@@ -30,7 +32,13 @@ func (m shotModel) Init() tea.Cmd {
 func (m shotModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case measurementMsg:
-		m.measurements = append(m.measurements, bookoo.Measurement(msg))
+		got := bookoo.Measurement(msg)
+		if !m.started && got.Timestamp > 0 && got.Timestamp < 2*time.Second {
+			m.started = true
+		}
+		if m.started {
+			m.measurements = append(m.measurements, got)
+		}
 		return m, waitForMeasurement(m.ctx, m.scale.Measurements())
 	case shotDoneMsg:
 		return m, tea.Quit

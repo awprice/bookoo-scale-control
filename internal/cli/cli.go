@@ -226,8 +226,14 @@ func runShotStream(ctx context.Context, scale Scale) error {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		started := false
 		for m := range scale.Measurements() {
-			measurements = append(measurements, m)
+			if !started && m.Timestamp > 0 && m.Timestamp < 1*time.Second {
+				started = true
+			}
+			if started {
+				measurements = append(measurements, m)
+			}
 			fmt.Printf("\rWeight: %7.2f g  Flow: %+6.2f g/s  Battery: %3d%%  Time: %s    ",
 				m.Weight, m.FlowRate, m.Battery, formatDuration(m.Timestamp))
 		}

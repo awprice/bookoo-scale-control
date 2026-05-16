@@ -1,7 +1,7 @@
 .PHONY: build test vet check demo
 
 build:
-	go build ./...
+	go build -o bookoo ./cmd/bookoo/
 
 test:
 	go test ./...
@@ -11,6 +11,5 @@ vet:
 
 check: vet test
 
-demo:
-	go build -o bookoo ./cmd/bookoo/
+demo: build
 	PROMPT_COMMAND="" PS1="> " vhs vhs/demo.tape
