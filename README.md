@@ -7,7 +7,7 @@ A Go library and CLI for interacting with [Bookoo](https://bookoocoffee.com) esp
 | Scale | Status |
 |---|---|
 | Bookoo Themis Ultra | Tested |
-| Bookoo Mini | Supported (untested) |
+| Bookoo Themis Mini | Supported (untested) |
 
 ## CLI
 
@@ -25,10 +25,10 @@ bookoo <command> [flags]
 Commands:
   monitor    Stream live weight measurements until Ctrl+C
   tare       Tare the scale (zero the weight)
-  shot       Tare and start the timer (espresso shot mode)
+  shot       Tare, start the timer, and stream live measurements until Ctrl+C
   start      Start the built-in timer
   stop       Stop the built-in timer
-  reset      Reset the built-in timer to zero
+  reset      Stop the timer and reset it to zero
 
 Flags:
   -timeout duration   How long to scan before giving up (default 30s)
@@ -37,14 +37,14 @@ Flags:
 ### Examples
 
 ```sh
-# Watch live measurements while pulling a shot
-bookoo monitor
-
-# At the start of a shot: tare and start the timer in one step
+# Pull a shot: tares, starts the timer, and streams live measurements.
+# Ctrl+C stops the timer on the scale and disconnects.
 bookoo shot
 
-# Stop and reset the timer when the shot is done
-bookoo stop
+# Watch live measurements without touching the timer
+bookoo monitor
+
+# Reset the timer between shots (stops it first if still running)
 bookoo reset
 ```
 
@@ -103,7 +103,7 @@ type Measurement struct {
 ## Protocol Sources
 
 - [Bookoo Ultra Scale Protocol](https://github.com/BooKooCode/OpenSource/blob/main/bookoo_ultra_scale/protocols.md) — official BLE protocol specification
-- [Bookoo Mini Scale Protocol](https://github.com/BooKooCode/OpenSource/blob/main/bookoo_mini_scale/protocols.md) — official BLE protocol specification
+- [Bookoo Themis Mini Scale Protocol](https://github.com/BooKooCode/OpenSource/blob/main/bookoo_mini_scale/protocols.md) — official BLE protocol specification
 - [AcaiaArduinoBLE](https://github.com/tatemazer/AcaiaArduinoBLE) — reference implementation for Bookoo generic scale commands
 
 ## License

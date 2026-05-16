@@ -1,6 +1,6 @@
 // Package bookoo provides a client for Bookoo espresso scales over Bluetooth Low Energy.
 //
-// Supported scales: Bookoo Themis Ultra, Bookoo Mini.
+// Supported scales: Bookoo Themis Ultra, Bookoo Themis Mini.
 //
 // Basic usage:
 //
@@ -37,7 +37,7 @@ type Scale struct {
 
 // Connect scans for the nearest Bookoo scale and connects to it.
 // Cancel ctx to abort the scan; a deadline on ctx controls the scan timeout.
-// Both the Bookoo Themis Ultra and Bookoo Mini are supported.
+// Both the Bookoo Themis Ultra and Bookoo Themis Mini are supported.
 func Connect(ctx context.Context) (*Scale, error) {
 	adapter := bluetooth.DefaultAdapter
 	if err := adapter.Enable(); err != nil {
