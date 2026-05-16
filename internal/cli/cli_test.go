@@ -10,9 +10,11 @@ import (
 )
 
 // mockScale records which methods were called and returns configured errors.
+// args holds the last argument passed to each parameterised method.
 type mockScale struct {
 	mu           sync.Mutex
 	calls        []string
+	args         map[string]interface{}
 	measurements chan bookoo.Measurement
 	errs         map[string]error
 	closed       bool
@@ -22,6 +24,7 @@ func newMockScale() *mockScale {
 	return &mockScale{
 		measurements: make(chan bookoo.Measurement, 16),
 		errs:         map[string]error{},
+		args:         map[string]interface{}{},
 	}
 }
 
@@ -32,11 +35,27 @@ func (m *mockScale) record(name string) error {
 	return m.errs[name]
 }
 
+func (m *mockScale) recordWithArg(name string, arg interface{}) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls = append(m.calls, name)
+	m.args[name] = arg
+	return m.errs[name]
+}
+
 func (m *mockScale) Tare() error         { return m.record("Tare") }
 func (m *mockScale) StartTimer() error   { return m.record("StartTimer") }
 func (m *mockScale) StopTimer() error    { return m.record("StopTimer") }
 func (m *mockScale) ResetTimer() error   { return m.record("ResetTimer") }
 func (m *mockScale) TareAndStart() error { return m.record("TareAndStart") }
+
+func (m *mockScale) SetBeepLevel(level int) error        { return m.recordWithArg("SetBeepLevel", level) }
+func (m *mockScale) SetAutoOff(minutes int) error        { return m.recordWithArg("SetAutoOff", minutes) }
+func (m *mockScale) SetFlowSmoothing(enabled bool) error { return m.recordWithArg("SetFlowSmoothing", enabled) }
+func (m *mockScale) Calibrate() error                    { return m.record("Calibrate") }
+func (m *mockScale) SetStopCondition(cond bookoo.StopCondition) error {
+	return m.recordWithArg("SetStopCondition", cond)
+}
 
 func (m *mockScale) Measurements() <-chan bookoo.Measurement { return m.measurements }
 
@@ -236,6 +255,131 @@ func TestReset_propagatesStopError(t *testing.T) {
 	}
 	// ResetTimer should not be called if StopTimer failed.
 	assertNotCalled(t, mock.called(), "ResetTimer")
+}
+
+func TestBeep(t *testing.T) {
+	mock := newMockScale()
+	sendMeasurement(mock)
+
+	if err := newTestApp(mock).Run(context.Background(), []string{"beep", "3"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertCalled(t, mock.called(), "SetBeepLevel")
+	if mock.args["SetBeepLevel"] != 3 {
+		t.Errorf("expected level 3, got %v", mock.args["SetBeepLevel"])
+	}
+}
+
+func TestBeep_missingArg(t *testing.T) {
+	err := newTestApp(newMockScale()).Run(context.Background(), []string{"beep"})
+	if err == nil {
+		t.Error("expected error for missing beep level")
+	}
+}
+
+func TestBeep_invalidArg(t *testing.T) {
+	for _, arg := range []string{"abc", "6", "-1"} {
+		err := newTestApp(newMockScale()).Run(context.Background(), []string{"beep", arg})
+		if err == nil {
+			t.Errorf("expected error for beep %q", arg)
+		}
+	}
+}
+
+func TestAutoOff(t *testing.T) {
+	mock := newMockScale()
+	sendMeasurement(mock)
+
+	if err := newTestApp(mock).Run(context.Background(), []string{"auto-off", "15"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertCalled(t, mock.called(), "SetAutoOff")
+	if mock.args["SetAutoOff"] != 15 {
+		t.Errorf("expected 15 minutes, got %v", mock.args["SetAutoOff"])
+	}
+}
+
+func TestAutoOff_invalidArg(t *testing.T) {
+	for _, arg := range []string{"4", "31", "abc"} {
+		err := newTestApp(newMockScale()).Run(context.Background(), []string{"auto-off", arg})
+		if err == nil {
+			t.Errorf("expected error for auto-off %q", arg)
+		}
+	}
+}
+
+func TestSmoothing_on(t *testing.T) {
+	mock := newMockScale()
+	sendMeasurement(mock)
+
+	if err := newTestApp(mock).Run(context.Background(), []string{"smoothing", "on"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertCalled(t, mock.called(), "SetFlowSmoothing")
+	if mock.args["SetFlowSmoothing"] != true {
+		t.Errorf("expected smoothing=true, got %v", mock.args["SetFlowSmoothing"])
+	}
+}
+
+func TestSmoothing_off(t *testing.T) {
+	mock := newMockScale()
+	sendMeasurement(mock)
+
+	if err := newTestApp(mock).Run(context.Background(), []string{"smoothing", "off"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mock.args["SetFlowSmoothing"] != false {
+		t.Errorf("expected smoothing=false, got %v", mock.args["SetFlowSmoothing"])
+	}
+}
+
+func TestSmoothing_invalidArg(t *testing.T) {
+	err := newTestApp(newMockScale()).Run(context.Background(), []string{"smoothing", "maybe"})
+	if err == nil {
+		t.Error("expected error for invalid smoothing value")
+	}
+}
+
+func TestCalibrate(t *testing.T) {
+	mock := newMockScale()
+	sendMeasurement(mock)
+
+	if err := newTestApp(mock).Run(context.Background(), []string{"calibrate"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertCalled(t, mock.called(), "Calibrate")
+}
+
+func TestStopCondition_flow(t *testing.T) {
+	mock := newMockScale()
+	sendMeasurement(mock)
+
+	if err := newTestApp(mock).Run(context.Background(), []string{"stop-condition", "flow"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertCalled(t, mock.called(), "SetStopCondition")
+	if mock.args["SetStopCondition"] != bookoo.StopConditionFlowStops {
+		t.Errorf("expected StopConditionFlowStops, got %v", mock.args["SetStopCondition"])
+	}
+}
+
+func TestStopCondition_container(t *testing.T) {
+	mock := newMockScale()
+	sendMeasurement(mock)
+
+	if err := newTestApp(mock).Run(context.Background(), []string{"stop-condition", "container"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mock.args["SetStopCondition"] != bookoo.StopConditionContainerRemoved {
+		t.Errorf("expected StopConditionContainerRemoved, got %v", mock.args["SetStopCondition"])
+	}
+}
+
+func TestStopCondition_invalidArg(t *testing.T) {
+	err := newTestApp(newMockScale()).Run(context.Background(), []string{"stop-condition", "timer"})
+	if err == nil {
+		t.Error("expected error for invalid stop-condition value")
+	}
 }
 
 func TestClose_alwaysCalled(t *testing.T) {

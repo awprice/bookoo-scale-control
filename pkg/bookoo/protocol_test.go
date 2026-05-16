@@ -122,6 +122,40 @@ func TestParsePacket_wrongType(t *testing.T) {
 	}
 }
 
+func TestBuildCmd_checksumIsXOROfAllBytes(t *testing.T) {
+	cases := []struct{ d1, d2, d3 byte }{
+		{0x02, 0x00, 0x00}, // beep silent
+		{0x02, 0x00, 0x05}, // beep loudest
+		{0x03, 0x00, 0x05}, // auto-off 5 min
+		{0x03, 0x00, 0x1E}, // auto-off 30 min
+		{0x08, 0x01, 0x00}, // flow smoothing on
+		{0x08, 0x00, 0x00}, // flow smoothing off
+		{0x09, 0x00, 0x00}, // calibrate
+		{0x0B, 0x00, 0x00}, // stop condition: flow stops
+		{0x0B, 0x01, 0x00}, // stop condition: container removed
+	}
+	for _, tc := range cases {
+		cmd := buildCmd(tc.d1, tc.d2, tc.d3)
+		if len(cmd) != 6 {
+			t.Fatalf("buildCmd returned %d bytes, want 6", len(cmd))
+		}
+		want := cmd[0] ^ cmd[1] ^ cmd[2] ^ cmd[3] ^ cmd[4]
+		if cmd[5] != want {
+			t.Errorf("buildCmd(0x%02X,0x%02X,0x%02X): checksum 0x%02X, want 0x%02X",
+				tc.d1, tc.d2, tc.d3, cmd[5], want)
+		}
+	}
+}
+
+func TestBuildCmd_calibrateChecksumMatchesDoc(t *testing.T) {
+	// The Ultra protocol documentation explicitly states the calibrate checksum is 0x00,
+	// which we can independently verify with the XOR formula.
+	cmd := buildCmd(0x09, 0x00, 0x00)
+	if cmd[5] != 0x00 {
+		t.Errorf("calibrate checksum: got 0x%02X, want 0x00", cmd[5])
+	}
+}
+
 func TestCommandBytes(t *testing.T) {
 	cases := []struct {
 		name string

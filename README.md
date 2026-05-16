@@ -22,13 +22,22 @@ go install github.com/awprice/bookoo-scale-control/cmd/bookoo@latest
 ```
 bookoo <command> [flags]
 
-Commands:
-  monitor    Stream live weight measurements until Ctrl+C
-  tare       Tare the scale (zero the weight)
-  shot       Tare, start the timer, and stream live measurements until Ctrl+C
-  start      Start the built-in timer
-  stop       Stop the built-in timer
-  reset      Stop the timer and reset it to zero
+Shot commands:
+  monitor                        Stream live weight measurements until Ctrl+C
+  tare                           Tare the scale (zero the weight)
+  shot                           Tare, start the timer, and stream live measurements until Ctrl+C
+
+Timer commands:
+  start                          Start the built-in timer
+  stop                           Stop the built-in timer
+  reset                          Stop the timer and reset it to zero
+
+Settings commands:
+  beep <0-5>                     Set speaker volume (0=silent, 5=loudest)
+  auto-off <5-30>                Set inactivity auto-off timeout in minutes
+  smoothing on|off               Enable or disable flow rate smoothing
+  calibrate                      Run calibration routine (scale must be empty)
+  stop-condition flow|container  Set auto-stop trigger (Themis Ultra only)
 
 Flags:
   -timeout duration   How long to scan before giving up (default 30s)
@@ -46,6 +55,12 @@ bookoo monitor
 
 # Reset the timer between shots (stops it first if still running)
 bookoo reset
+
+# Adjust settings
+bookoo beep 3            # set volume to mid-level
+bookoo auto-off 10       # power off after 10 minutes idle
+bookoo smoothing on      # enable flow rate smoothing
+bookoo stop-condition flow  # stop timer when flow drops to zero (Ultra only)
 ```
 
 ## Library
@@ -80,6 +95,11 @@ for m := range scale.Measurements() {
 | `StartTimer()` | Start the built-in timer |
 | `StopTimer()` | Stop the built-in timer |
 | `ResetTimer()` | Reset the timer to zero |
+| `SetBeepLevel(level int)` | Set speaker volume (0=silent, 5=loudest) |
+| `SetAutoOff(minutes int)` | Set inactivity auto-off timeout (5–30 minutes) |
+| `SetFlowSmoothing(enabled bool)` | Enable or disable flow rate smoothing |
+| `Calibrate()` | Run the built-in calibration routine (scale must be empty) |
+| `SetStopCondition(cond)` | Set auto-stop trigger (`StopConditionFlowStops` or `StopConditionContainerRemoved`) |
 | `Close()` | Disconnect and release resources |
 
 Each `Measurement` contains:

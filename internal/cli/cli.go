@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/awprice/bookoo-scale-control/pkg/bookoo"
@@ -12,13 +14,22 @@ import (
 
 const usage = `Usage: bookoo <command> [flags]
 
-Commands:
-  monitor    Stream live weight measurements until Ctrl+C
-  tare       Tare the scale (zero the weight)
-  shot       Tare, start the timer, and stream live measurements until Ctrl+C
-  start      Start the built-in timer
-  stop       Stop the built-in timer
-  reset      Stop the timer and reset it to zero
+Shot commands:
+  monitor                        Stream live weight measurements until Ctrl+C
+  tare                           Tare the scale (zero the weight)
+  shot                           Tare, start the timer, and stream live measurements until Ctrl+C
+
+Timer commands:
+  start                          Start the built-in timer
+  stop                           Stop the built-in timer
+  reset                          Stop the timer and reset it to zero
+
+Settings commands:
+  beep <0-5>                     Set speaker volume (0=silent, 5=loudest)
+  auto-off <5-30>                Set inactivity auto-off timeout in minutes
+  smoothing on|off               Enable or disable flow rate smoothing
+  calibrate                      Run calibration routine (scale must be empty)
+  stop-condition flow|container  Set auto-stop trigger (Themis Ultra only)
 
 Flags:
   -timeout duration   How long to scan before giving up (default 30s)
@@ -31,6 +42,11 @@ type Scale interface {
 	StopTimer() error
 	ResetTimer() error
 	TareAndStart() error
+	SetBeepLevel(level int) error
+	SetAutoOff(minutes int) error
+	SetFlowSmoothing(enabled bool) error
+	Calibrate() error
+	SetStopCondition(cond bookoo.StopCondition) error
 	Measurements() <-chan bookoo.Measurement
 	Close() error
 }
@@ -66,6 +82,8 @@ func (a *App) Run(ctx context.Context, args []string) error {
 		return err
 	}
 
+	posArgs := fs.Args()
+
 	scanCtx, cancel := context.WithTimeout(ctx, *timeout)
 	defer cancel()
 
@@ -87,6 +105,47 @@ func (a *App) Run(ctx context.Context, args []string) error {
 			}
 			return s.ResetTimer()
 		})
+
+	case "beep":
+		level, err := parseIntArg(posArgs, "beep", 0, 5)
+		if err != nil {
+			return err
+		}
+		return a.command(scanCtx, fmt.Sprintf("Beep level set to %d.", level), func(s Scale) error {
+			return s.SetBeepLevel(level)
+		})
+
+	case "auto-off":
+		minutes, err := parseIntArg(posArgs, "auto-off", 5, 30)
+		if err != nil {
+			return err
+		}
+		return a.command(scanCtx, fmt.Sprintf("Auto-off set to %d minutes.", minutes), func(s Scale) error {
+			return s.SetAutoOff(minutes)
+		})
+
+	case "smoothing":
+		enabled, err := parseOnOff(posArgs, "smoothing")
+		if err != nil {
+			return err
+		}
+		state := map[bool]string{true: "enabled", false: "disabled"}[enabled]
+		return a.command(scanCtx, fmt.Sprintf("Flow smoothing %s.", state), func(s Scale) error {
+			return s.SetFlowSmoothing(enabled)
+		})
+
+	case "calibrate":
+		return a.command(scanCtx, "Calibration started.", func(s Scale) error { return s.Calibrate() })
+
+	case "stop-condition":
+		cond, err := parseStopCondition(posArgs)
+		if err != nil {
+			return err
+		}
+		return a.command(scanCtx, "Stop condition updated.", func(s Scale) error {
+			return s.SetStopCondition(cond)
+		})
+
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %q\n\n%s", cmd, usage)
 		return fmt.Errorf("unknown command: %q", cmd)
@@ -180,4 +239,46 @@ func formatDuration(d time.Duration) string {
 	s := (d % time.Minute) / time.Second
 	ds := (d % time.Second) / (100 * time.Millisecond)
 	return fmt.Sprintf("%02d:%02d.%d", m, s, ds)
+}
+
+// parseIntArg parses a single positional integer argument within [min, max].
+func parseIntArg(args []string, cmd string, min, max int) (int, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("usage: bookoo %s <%d-%d>", cmd, min, max)
+	}
+	n, err := strconv.Atoi(args[0])
+	if err != nil || n < min || n > max {
+		return 0, fmt.Errorf("%s: value must be %d–%d, got %q", cmd, min, max, args[0])
+	}
+	return n, nil
+}
+
+// parseOnOff parses a single "on" or "off" positional argument.
+func parseOnOff(args []string, cmd string) (bool, error) {
+	if len(args) != 1 {
+		return false, fmt.Errorf("usage: bookoo %s on|off", cmd)
+	}
+	switch strings.ToLower(args[0]) {
+	case "on":
+		return true, nil
+	case "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("%s: expected on or off, got %q", cmd, args[0])
+	}
+}
+
+// parseStopCondition parses "flow" or "container" into a StopCondition.
+func parseStopCondition(args []string) (bookoo.StopCondition, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("usage: bookoo stop-condition flow|container")
+	}
+	switch strings.ToLower(args[0]) {
+	case "flow":
+		return bookoo.StopConditionFlowStops, nil
+	case "container":
+		return bookoo.StopConditionContainerRemoved, nil
+	default:
+		return 0, fmt.Errorf("stop-condition: expected flow or container, got %q", args[0])
+	}
 }

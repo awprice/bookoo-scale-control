@@ -161,6 +161,43 @@ func (s *Scale) ResetTimer() error { return s.writeCmd(cmdTimerReset) }
 // This is the recommended command to use at the start of an espresso shot.
 func (s *Scale) TareAndStart() error { return s.writeCmd(cmdTareAndStart) }
 
+// SetBeepLevel sets the speaker volume. level must be in the range 0 (silent) to 5 (loudest).
+func (s *Scale) SetBeepLevel(level int) error {
+	if level < 0 || level > 5 {
+		return fmt.Errorf("beep level must be 0–5, got %d", level)
+	}
+	return s.writeCmd(buildCmd(0x02, 0x00, byte(level)))
+}
+
+// SetAutoOff sets the inactivity timeout before the scale powers off.
+// minutes must be in the range 5 to 30.
+func (s *Scale) SetAutoOff(minutes int) error {
+	if minutes < 5 || minutes > 30 {
+		return fmt.Errorf("auto-off must be 5–30 minutes, got %d", minutes)
+	}
+	return s.writeCmd(buildCmd(0x03, 0x00, byte(minutes)))
+}
+
+// SetFlowSmoothing enables or disables the flow rate smoothing algorithm.
+func (s *Scale) SetFlowSmoothing(enabled bool) error {
+	v := byte(0x00)
+	if enabled {
+		v = 0x01
+	}
+	return s.writeCmd(buildCmd(0x08, v, 0x00))
+}
+
+// Calibrate initiates the scale's built-in calibration routine.
+// The scale must have nothing on it when this is called.
+func (s *Scale) Calibrate() error {
+	return s.writeCmd(buildCmd(0x09, 0x00, 0x00))
+}
+
+// SetStopCondition configures when the timer stops automatically in auto mode.
+func (s *Scale) SetStopCondition(cond StopCondition) error {
+	return s.writeCmd(buildCmd(0x0B, byte(cond), 0x00))
+}
+
 // Measurements returns a channel of live weight readings from the scale.
 // The channel is closed when Close is called.
 func (s *Scale) Measurements() <-chan Measurement {

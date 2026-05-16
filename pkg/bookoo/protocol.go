@@ -13,13 +13,31 @@ var (
 )
 
 // Commands are 6 bytes: [product, type, data1, data2, data3, checksum].
-// Values are taken directly from the official Bookoo protocol documentation.
+// Fixed commands use byte values taken directly from the official Bookoo protocol
+// documentation. Parameterised commands are built by buildCmd.
 var (
 	cmdTare         = []byte{0x03, 0x0A, 0x01, 0x00, 0x00, 0x08}
 	cmdTimerStart   = []byte{0x03, 0x0A, 0x04, 0x00, 0x00, 0x0A}
 	cmdTimerStop    = []byte{0x03, 0x0A, 0x05, 0x00, 0x00, 0x0D}
 	cmdTimerReset   = []byte{0x03, 0x0A, 0x06, 0x00, 0x00, 0x0C}
 	cmdTareAndStart = []byte{0x03, 0x0A, 0x07, 0x00, 0x00, 0x00}
+)
+
+// buildCmd constructs a 6-byte command packet for parameterised commands.
+// The checksum is computed as the XOR of all preceding bytes per the protocol spec.
+func buildCmd(data1, data2, data3 byte) []byte {
+	checksum := byte(0x03) ^ byte(0x0A) ^ data1 ^ data2 ^ data3
+	return []byte{0x03, 0x0A, data1, data2, data3, checksum}
+}
+
+// StopCondition controls when the scale stops automatically in auto mode.
+type StopCondition uint8
+
+const (
+	// StopConditionFlowStops halts the timer when the flow rate reaches zero.
+	StopConditionFlowStops StopCondition = 0x00
+	// StopConditionContainerRemoved halts the timer when the container is lifted off.
+	StopConditionContainerRemoved StopCondition = 0x01
 )
 
 // WeightUnit is the unit of measurement reported by the scale.
