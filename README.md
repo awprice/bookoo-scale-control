@@ -8,8 +8,8 @@ A Go library and CLI for interacting with [Bookoo](https://bookoocoffee.com) esp
 
 | Scale | Status |
 |---|---|
-| Bookoo Themis Ultra | Tested |
-| Bookoo Themis Mini | Supported (untested) |
+| [Bookoo Themis Ultra](https://bookoocoffee.com/products/bookoo-themis-ultra-coffee-scale) | Tested |
+| [Bookoo Themis Mini](https://bookoocoffee.com/products/bookoo-mini-coffee-scale) | Supported (untested) |
 
 ## CLI
 
